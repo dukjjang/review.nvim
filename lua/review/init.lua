@@ -6,6 +6,7 @@ local ns = api.nvim_create_namespace("review.nvim")
 local config = { auto_advance = true, keymaps = true }
 local watcher
 local state = { items = {}, buffers = {}, active = false }
+local priority = { PENDING = 1, REJECT = 2, OK = 3 }
 local groups = { PENDING = "ReviewPending", OK = "ReviewOK", REJECT = "ReviewReject" }
 
 local function notify(message)
@@ -81,7 +82,11 @@ function M.refresh()
     end
   end
   table.sort(state.items, function(a, b)
-    if a.path == b.path then return a.row < b.row end
+    if a.status ~= b.status then return priority[a.status] < priority[b.status] end
+    if a.path == b.path then
+      if a.row == b.row then return a.id < b.id end
+      return a.row < b.row
+    end
     return a.path < b.path
   end)
   summary.update(state.items)
@@ -192,7 +197,21 @@ function M.open(opts)
     watch(root)
     M.refresh()
     if not opts.no_jump then
+      local first
+      for _, item in ipairs(state.items) do
+        if not item.stale then first = item; break end
+      end
       if opts.reuse and state.resume then
+        local resumable = false
+        for _, item in ipairs(state.items) do
+          if first and item.id == state.resume.id and not item.stale and item.status == first.status then
+            resumable = true
+            break
+          end
+        end
+        if not resumable then state.resume = nil end
+      end
+      if opts.reuse and state.resume and first then
         jump(state.resume.id)
         local _, item = selected()
         if item and item.id == state.resume.id then
@@ -202,10 +221,7 @@ function M.open(opts)
         end
         return true
       end
-      for _, item in ipairs(state.items) do
-        if not item.stale and item.status == "PENDING" then jump(item.id); return true end
-      end
-      if state.items[1] then jump(state.items[1].id) end
+      if first then jump(first.id) end
     end
     return true
   end)

@@ -245,18 +245,20 @@ function M.mark(status)
   M.refresh()
   local index, item = selected()
   if not item then notify("리뷰 코드 범위 안에 커서를 두세요."); return end
+  local next_id
+  if config.auto_advance and status ~= "PENDING" then
+    for offset = 1, #state.items - 1 do
+      local candidate = state.items[(index - 1 + offset) % #state.items + 1]
+      if candidate.status == "PENDING" and not candidate.stale then next_id = candidate.id; break end
+    end
+  end
   guarded(function()
     local updated = vim.deepcopy(state.data)
     for _, entry in ipairs(updated.items) do if entry.id == item.id then entry.status = status end end
     state.version = store.save(state.root, updated, state.version)
     state.data = updated
     M.refresh()
-    if config.auto_advance and status ~= "PENDING" then
-      for offset = 1, #state.items do
-        local next_item = state.items[(index - 1 + offset) % #state.items + 1]
-        if next_item.status == "PENDING" and not next_item.stale then jump(next_item.id); return end
-      end
-    end
+    if next_id then jump(next_id) end
   end)
 end
 

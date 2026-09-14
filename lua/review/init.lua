@@ -54,7 +54,8 @@ function M.refresh()
   local contents = {}
   for _, saved in ipairs(state.data.items) do
     local path = state.root .. "/" .. saved.path
-    if not saved.archived and (not state.scope or path == state.scope) then
+    if not saved.archived and (not state.scope or path == state.scope)
+      and (not state.review_source or saved.source == state.review_source) then
       local buf = vim.fn.bufadd(path)
       state.buffers[buf] = true
       if contents[buf] == nil then
@@ -191,6 +192,7 @@ function M.open(opts)
     state.source = api.nvim_get_current_win()
     if not opts.reuse then
       state.scope = opts.buffer and api.nvim_buf_get_name(0) or nil
+      state.review_source = opts.source
       state.resume = nil
     end
     state.active = true
@@ -226,6 +228,17 @@ function M.open(opts)
     return true
   end)
 end
+function M.local_diff()
+  return guarded(function()
+    local result = require("review.local_diff").apply(root_for(api.nvim_get_current_buf()))
+    M.open({ root = result.root, source = "local-diff" })
+    vim.notify(("review.nvim: 로컬 diff · 추가 %d / 갱신 %d / 유지 %d / 보관 %d / 제외 %d")
+      :format(result.created, result.updated, result.unchanged, result.archived, #result.skipped))
+    if #result.skipped > 0 then vim.notify(table.concat(result.skipped, "\n")) end
+    return result
+  end)
+end
+
 function M.toggle()
   if state.active then M.close() else M.open({ reuse = state.root ~= nil }) end
 end
@@ -331,7 +344,8 @@ end
 function M.pick(opts)
   local ok, pickers = pcall(require, "telescope.pickers")
   if not ok then notify("Install telescope.nvim to search review points"); return end
-  if not M.open(vim.tbl_extend("force", opts or {}, { no_jump = true })) then return end
+  local scope = state.active and { reuse = true } or {}
+  if not M.open(vim.tbl_extend("force", scope, opts or {}, { no_jump = true })) then return end
   if #state.items == 0 then notify("리뷰가 없습니다. :ReviewAdd 설명 또는 :ReviewImport로 등록하세요."); return end
   local actions = require("telescope.actions")
   local action_state = require("telescope.actions.state")
@@ -364,6 +378,7 @@ function M.setup(opts)
   })
   api.nvim_create_user_command("Review", function(args) M.open(args.args ~= "" and { root = args.args } or {}) end, { nargs = "?", complete = "dir" })
   api.nvim_create_user_command("ReviewBuffer", function() M.open({ buffer = true }) end, {})
+  api.nvim_create_user_command("ReviewLocal", M.local_diff, {})
   api.nvim_create_user_command("ReviewStop", M.stop, {})
   api.nvim_create_user_command("ReviewPick", function() M.pick() end, {})
   api.nvim_create_user_command("ReviewAdd", function(args) M.add(args.args, args.line1, args.line2) end, { nargs = "+", range = true })
@@ -376,6 +391,7 @@ function M.setup(opts)
   api.nvim_create_user_command("ReviewImportBuffer", function() M.import({ buffer = true }) end, {})
   if config.keymaps then
     for _, mapping in ipairs({
+      { "<leader>rl", M.local_diff, "Review local changes" },
       { "<leader>rv", M.toggle, "Toggle review mode" }, { "<leader>fr", M.pick, "Find review points" },
       { "]r", function() M.next(1) end, "Next review point" }, { "[r", function() M.next(-1) end, "Previous review point" },
       { "<leader>ro", function() M.mark("OK") end, "Review OK" }, { "<leader>rx", function() M.mark("REJECT") end, "Review reject" },

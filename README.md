@@ -25,11 +25,21 @@ AI가 작성한 코드를 훑으며 확인할 부분을 찾고, 직접 수정하
     "nvim-telescope/telescope.nvim",
     "nvim-lua/plenary.nvim",
   },
-  cmd = { "Review", "ReviewBuffer", "ReviewStop", "ReviewPick", "ReviewAdd", "ReviewRelocate", "ReviewImport", "ReviewImportBuffer" },
-  keys = { "<leader>rv", "<leader>fr", "]r", "[r", "<leader>ro", "<leader>rx", "<leader>ru" },
+  cmd = { "ReviewLocal", "Review", "ReviewBuffer", "ReviewStop", "ReviewPick", "ReviewAdd", "ReviewRelocate", "ReviewImport", "ReviewImportBuffer" },
+  keys = { "<leader>rl", "<leader>rv", "<leader>fr", "]r", "[r", "<leader>ro", "<leader>rx", "<leader>ru" },
   opts = { auto_advance = true },
 }
 ```
+
+## 로컬 변경을 빠르게 리뷰
+
+파일을 저장한 뒤 `<leader>rl` 또는 `:ReviewLocal`을 실행합니다. AI·원격 조회·fetch 없이 HEAD와 현재 디스크를 비교하고 staged·unstaged의 최종 변경 및 Git이 추적하지 않는 새 파일을 등록합니다. 첫 커밋 전 저장소도 지원합니다. 코드를 다시 수정했다면 같은 명령을 실행해 갱신하세요. `<leader>rv`는 기존처럼 표시만 켜고 끕니다.
+
+Git diff 구간에서 실제 추가·수정된 첫 줄부터 마지막 줄까지 PENDING으로 표시합니다. 앞뒤의 미변경 문맥은 강조하지 않습니다. JS/TS 모듈 상단의 정적 import만 추가·수정·삭제한 구간은 제외합니다. 실제 로직이 함께 바뀐 구간과 동적 `import()`는 유지하며, 구문을 확실히 식별하지 못하면 리뷰 대상으로 남깁니다. AI의 의미 분석·설명 생성은 하지 않습니다. 같은 HEAD에서 변경 내용이 같으면 OK/REJECT를 보존하고, 변경되면 PENDING으로 되돌립니다. 커밋 등으로 HEAD가 바뀌거나 로컬 diff에서 사라진 자체 항목은 보관합니다. 로컬 리뷰에서는 로컬 diff 항목만 표시·집계하며 검색창도 같은 범위를 유지합니다. AI·수동 등록 항목은 보존하며 `:Review`로 전체 리뷰를 다시 열 수 있습니다.
+
+점으로 시작하는 숨김 파일·디렉터리(`.argent/`, `.github/`, `.env` 등, 경로 중간도 포함)와 테스트 경로(`tests`, `test`, `__tests__`), `*.test.*`, `*.spec.*`, mock·snapshot·fixture 등 알려진 테스트 전용 경로와 로그를 제외합니다. 경로 기반 판별이므로 관례 밖의 테스트 이름은 자동 식별하지 못할 수 있습니다. 바이너리, 1 MiB 초과 파일, 심볼릭 링크, 완전 삭제 파일, 위치가 중복되어 불명확한 구간은 제외 이유를 알립니다. 삭제만 있는 구간은 삭제 사실을 알리고 주변의 미변경 코드에는 리뷰를 연결하지 않습니다. 소스와 Git 인덱스를 수정하지 않으며 미저장 변경이 있으면 저장을 요청합니다.
+
+설명이 필요한 브랜치 전체 점검에는 기존 AI 스킬·동기화 API를 계속 사용할 수 있습니다.
 
 ## 새 리뷰 등록
 
@@ -47,6 +57,7 @@ Lua에서는 현재 파일을 대상으로 `require("review").add("설명", 시�
 
 | 키 / 명령 | 동작 |
 | --- | --- |
+| `<leader>rl` / `:ReviewLocal` | 로컬 diff에서 리뷰 자동 등록·갱신 후 진입 |
 | `<leader>rv` | 리뷰 모드 진입·일시 중지·마지막 지점 재개 |
 | `<leader>fr` / `:ReviewPick` | 상태·파일명·설명 검색, Enter로 이동 |
 | `]r` / `[r` | 위치가 확인된 다음·이전 리뷰로 순환 이동 |
@@ -114,6 +125,7 @@ require("review").setup({ auto_advance = true, keymaps = true })
 `auto_advance`는 판정 후 다음 미검토 항목으로 이동합니다. `keymaps = false`이면 기본 키맵을 등록하지 않습니다. `ReviewPending`, `ReviewOK`, `ReviewReject`, `ReviewSummary`, `ReviewCountOK`, `ReviewCountPENDING`, `ReviewCountREJECT`로 표시 색상을 조정할 수 있습니다.
 
 ```sh
+nvim --headless -u NONE -l tests/local_diff_test.lua
 nvim --headless -u NONE -l tests/review_test.lua
 nvim --headless -u NONE -l tests/migration_test.lua
 nvim --headless -u NONE -l tests/toggle_test.lua

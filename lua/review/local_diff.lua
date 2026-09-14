@@ -15,6 +15,7 @@ local function excluded(path)
   for part in path:gmatch("[^/]+") do
     if part:sub(1, 1) == "." then return true end
   end
+  if ("/" .. path):find("/__generated__/", 1, true) and path:match("%.graphql%.[jt]s$") then return true end
   local name = vim.fs.basename(path):lower()
   local lower = "/" .. path:lower() .. "/"
   for _, directory in ipairs({ "__tests__", "__mocks__", "__snapshots__", "test", "tests", "fixtures", "test-utils", "test_helpers" }) do
@@ -59,14 +60,16 @@ function M.apply(directory)
     local absolute = root .. "/" .. path
     local stat = uv.fs_lstat(absolute)
     if excluded(path) or not stat or stat.type ~= "file" or stat.size > 1024 * 1024 then
-      counts.skipped[#counts.skipped + 1] = path .. " (테스트·로그, 삭제·비일반 파일 또는 1 MiB 초과)"
+      counts.skipped[#counts.skipped + 1] = path .. " (숨김·테스트·로그·Relay 생성 코드, 삭제·비일반 파일 또는 1 MiB 초과)"
     else
       for _, buf in ipairs(api.nvim_list_bufs()) do
         assert(not (api.nvim_buf_get_name(buf) == absolute and vim.bo[buf].modified), "먼저 저장하세요: " .. path)
       end
       local text = read(absolute)
       snapshots[absolute] = text
-      if text:find("\0", 1, true) then
+      if (text:match("^%s*/%*.-%*/") or ""):match("@generated%s+SignedSource<<%x+>>") then
+        counts.skipped[#counts.skipped + 1] = path .. " (SignedSource 자동 생성 코드)"
+      elseif text:find("\0", 1, true) then
         counts.skipped[#counts.skipped + 1] = path .. " (바이너리)"
       else
         local lines = vim.split(text, "\n", { plain = true })

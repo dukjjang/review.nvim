@@ -1,0 +1,45 @@
+vim.opt.rtp:prepend(vim.fn.getcwd())
+vim.env.XDG_DATA_HOME = vim.fn.tempname()
+local root = vim.fn.tempname()
+vim.fn.mkdir(root, "p")
+root = vim.uv.fs_realpath(root)
+local function git(args)
+  local command = { "git", "-C", root }
+  vim.list_extend(command, args)
+  local result = vim.system(command, { text = true }):wait()
+  assert(result.code == 0, result.stderr)
+end
+local function write(path, lines)
+  vim.fn.mkdir(vim.fs.dirname(root .. "/" .. path), "p")
+  vim.fn.writefile(lines, root .. "/" .. path)
+end
+local store, diff = require("review.store"), require("review.local_diff")
+local ok, err = xpcall(function()
+  git({ "init", "-q" })
+  write("custom/Query.ts", { "export const value = 1" })
+  git({ "add", "." })
+  git({ "-c", "user.name=Test", "-c", "user.email=test@example.test", "commit", "-qm", "initial" })
+  write("custom/Query.ts", { "export const value = 2" })
+  assert(diff.apply(root).created == 1)
+  write("custom/Query.ts", { "/**", " * @generated SignedSource<<2eaa663acb41f467c3cf027d779b1f4d>>", " */", "export const value = 3" })
+  git({ "add", "custom/Query.ts" })
+  write("src/__generated__/Query.graphql.ts", { "export const generated = 1" })
+  write("__generated__/Fragment.graphql.js", { "module.exports = {}" })
+  write("screen.ts", { "const query = graphql`query ScreenQuery { viewer { id } }`" })
+  write("schema.graphql", { "type Query { viewer: User }" })
+  write("example.ts", { "const example = '@generated SignedSource<<abcd>>'" })
+  local result = diff.apply(root)
+  assert(result.created == 3 and result.archived == 1 and #result.skipped == 3, vim.inspect(result))
+  local active = {}
+  for _, item in ipairs(store.load(root).items) do
+    if not item.archived then active[item.path] = true end
+  end
+  assert(active["screen.ts"] and active["schema.graphql"] and active["example.ts"], "Hand-written GraphQL and marker examples must remain reviewable")
+  assert(not active["custom/Query.ts"], "Existing generated reviews must be archived")
+  assert(diff.apply(root).unchanged == 3, "Repeated sync must retain only hand-written reviews")
+end, debug.traceback)
+vim.fn.delete(root, "rf")
+vim.fn.delete(vim.env.XDG_DATA_HOME, "rf")
+if not ok then io.stderr:write(err .. "\n"); vim.cmd("cquit 1") end
+print("PASS: Relay generated files excluded, existing points archived, hand-written GraphQL retained")
+vim.cmd("qa!")

@@ -37,7 +37,7 @@ AI가 작성한 코드를 훑으며 확인할 부분을 찾고, 직접 수정하
 
 Git diff 구간에서 실제 추가·수정된 첫 줄부터 마지막 줄까지 PENDING으로 표시합니다. 앞뒤의 미변경 문맥은 강조하지 않습니다. JS/TS 모듈 상단의 정적 import만 추가·수정·삭제한 구간은 제외합니다. 실제 로직이 함께 바뀐 구간과 동적 `import()`는 유지하며, 구문을 확실히 식별하지 못하면 리뷰 대상으로 남깁니다. AI의 의미 분석·설명 생성은 하지 않습니다. 같은 HEAD에서 변경 내용이 같으면 OK/REJECT를 보존하고, 변경되면 PENDING으로 되돌립니다. 커밋 등으로 HEAD가 바뀌거나 로컬 diff에서 사라진 자체 항목은 보관합니다. 로컬 리뷰에서는 로컬 diff 항목만 표시·집계하며 검색창도 같은 범위를 유지합니다. AI·수동 등록 항목은 보존하며 `:Review`로 전체 리뷰를 다시 열 수 있습니다.
 
-점으로 시작하는 숨김 파일·디렉터리(`.argent/`, `.github/`, `.env` 등, 경로 중간도 포함)와 테스트 경로(`tests`, `test`, `__tests__`), `*.test.*`, `*.spec.*`, mock·snapshot·fixture 등 알려진 테스트 전용 경로와 로그를 제외합니다. 경로 기반 판별이므로 관례 밖의 테스트 이름은 자동 식별하지 못할 수 있습니다. 바이너리, 1 MiB 초과 파일, 심볼릭 링크, 완전 삭제 파일, 위치가 중복되어 불명확한 구간은 제외 이유를 알립니다. 삭제만 있는 구간은 삭제 사실을 알리고 주변의 미변경 코드에는 리뷰를 연결하지 않습니다. 소스와 Git 인덱스를 수정하지 않으며 미저장 변경이 있으면 저장을 요청합니다.
+점으로 시작하는 숨김 파일·디렉터리(`.argent/`, `.github/`, `.env` 등, 경로 중간도 포함)와 테스트 경로(`tests`, `test`, `__tests__`), `*.test.*`, `*.spec.*`, mock·snapshot·fixture 등 알려진 테스트 전용 경로와 로그를 제외합니다. Relay의 `__generated__/*.graphql.ts`·`*.graphql.js` 파일과 첫 블록 주석에 `@generated SignedSource<<...>>`가 있는 자동 생성 파일도 전체 제외합니다. 이전 로컬 리뷰에 잡혔다면 `:ReviewLocal` 재실행 시 보관 처리됩니다. 경로 기반 판별이므로 관례 밖의 테스트 이름은 자동 식별하지 못할 수 있습니다. 바이너리, 1 MiB 초과 파일, 심볼릭 링크, 완전 삭제 파일, 위치가 중복되어 불명확한 구간은 제외 이유를 알립니다. 삭제만 있는 구간은 삭제 사실을 알리고 주변의 미변경 코드에는 리뷰를 연결하지 않습니다. 소스와 Git 인덱스를 수정하지 않으며 미저장 변경이 있으면 저장을 요청합니다.
 
 설명이 필요한 브랜치 전체 점검에는 기존 AI 스킬·동기화 API를 계속 사용할 수 있습니다.
 
@@ -125,6 +125,7 @@ require("review").setup({ auto_advance = true, keymaps = true })
 `auto_advance`는 판정 후 다음 미검토 항목으로 이동합니다. `keymaps = false`이면 기본 키맵을 등록하지 않습니다. `ReviewPending`, `ReviewOK`, `ReviewReject`, `ReviewSummary`, `ReviewCountOK`, `ReviewCountPENDING`, `ReviewCountREJECT`로 표시 색상을 조정할 수 있습니다.
 
 ```sh
+nvim --headless -u NONE -l tests/generated_test.lua
 nvim --headless -u NONE -l tests/local_diff_test.lua
 nvim --headless -u NONE -l tests/review_test.lua
 nvim --headless -u NONE -l tests/migration_test.lua
